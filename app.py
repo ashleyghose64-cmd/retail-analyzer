@@ -1,81 +1,79 @@
-import streamlit as st
 import pandas as pd
-import base64
+import streamlit as st
 
-# ---------- Helper Function ----------
-def get_csv_download_button(df: pd.DataFrame, filename: str, button_text: str):
-    """Generates a styled HTML button for downloading a CSV."""
-    csv = df.to_csv(index=False)
-    b64 = base64.b64encode(csv.encode()).decode()
-    href = f"""
-    <a href="data:file/csv;base64,{b64}" download="{filename}">
-        <button style="
-            background-color:#4CAF50;
-            border:none;
-            color:white;
-            padding:10px 20px;
-            text-align:center;
-            text-decoration:none;
-            display:inline-block;
-            font-size:16px;
-            margin:5px;
-            border-radius:8px;
-            cursor:pointer;">
-            {button_text}
-        </button>
-    </a>
-    """
-    return href
+st.set_page_config(page_title="Retail Sales Analyzer", page_icon="🛒", layout="wide")
 
-# ---------- Page Config ----------
-st.set_page_config(page_title="Retail Analyzer", layout="wide")
+st.title("🛒 Retail Sales Analyzer")
 
-st.title("📊 Retail Sales Analyzer")
-st.write("Upload your sales Excel file and get insights instantly.")
-
-# ---------- File Upload ----------
-uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx", "xls"])
+uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
 
 if uploaded_file:
-    try:
-        df = pd.read_excel(uploaded_file, engine="openpyxl")
+    # ✅ Force pandas to use openpyxl engine
+    df = pd.read_excel(uploaded_file, engine="openpyxl")
 
-        st.subheader("📄 Raw Data")
-        st.dataframe(df, use_container_width=True)
+    # Expected columns in your sheet
+    required_cols = [
+        "Barcode", "Sale Date & Time", "Category", "Subcategory",
+        "Product Name", "Cost Price(Rs.)", "Selling Price(Rs.)",
+        "Units Sold", "Total Sale(Rs.)"
+    ]
 
-        # ---------- Basic Stats ----------
-        st.subheader("📈 Summary Statistics")
-        st.write(df.describe())
+    if all(col in df.columns for col in required_cols):
 
-        # ---------- Profit / Loss Analysis ----------
-        if "Profit" in df.columns:
-            profit_df = df[df["Profit"] > 0]
-            loss_df = df[df["Profit"] < 0]
+        # ✅ Recalculate Total Sale
+        df["Total Sale(Rs.)"] = df["Selling Price(Rs.)"] * df["Units Sold"]
 
-            col1, col2 = st.columns(2)
+        # ✅ Add Profit/Loss column
+        df["Profit/Loss"] = (df["Selling Price(Rs.)"] - df["Cost Price(Rs.)"]) * df["Units Sold"]
 
-            with col1:
-                st.markdown("### ✅ Profit Data")
-                st.dataframe(profit_df)
-                st.markdown(
-                    get_csv_download_button(profit_df, "profit_data.csv", "📥 Download Profit Data"),
-                    unsafe_allow_html=True
-                )
+        # ================= OVERALL SUMMARY =================
+        total_units = df["Units Sold"].sum()
+        total_sales = df["Total Sale(Rs.)"].sum()
+        total_profit = df[df["Profit/Loss"] > 0]["Profit/Loss"].sum()
+        total_loss = df[df["Profit/Loss"] < 0]["Profit/Loss"].sum()
 
-            with col2:
-                st.markdown("### ❌ Loss Data")
-                st.dataframe(loss_df)
-                st.markdown(
-                    get_csv_download_button(loss_df, "loss_data.csv", "📥 Download Loss Data"),
-                    unsafe_allow_html=True
-                )
+        st.subheader("📊 Overall Summary")
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Units Sold", f"{total_units:,}")
+        col2.metric("Total Sales", f"₹{total_sales:,.2f}")
+        col3.metric("Total Profit", f"₹{total_profit:,.2f}")
+        col4.metric("Total Loss", f"₹{total_loss:,.2f}")
 
-        # ---------- Full Report Download ----------
-        st.subheader("📥 Download Full Report")
-        st.markdown(
-            get_csv_download_button(df, "full_report.csv", "📥 Download Full Report"),
-            unsafe_allow_html=True
+        # ================= CATEGORY SUMMARY =================
+        st.subheader("📂 Category-wise Summary")
+        category_summary = df.groupby("Category").agg({
+            "Units Sold": "sum",
+            "Total Sale(Rs.)": "sum",
+            "Profit/Loss": "sum"
+        }).sort_values("Total Sale(Rs.)", ascending=False)
+
+        st.dataframe(category_summary, use_container_width=True)
+        st.bar_chart(category_summary["Total Sale(Rs.)"], use_container_width=True)
+
+        # ================= PRODUCT SUMMARY =================
+        st.subheader("🛍️ Product-wise Summary")
+        product_summary = df.groupby("Product Name").agg({
+            "Units Sold": "sum",
+            "Total Sale(Rs.)": "sum",
+            "Profit/Loss": "sum"
+        }).sort_values("Total Sale(Rs.)", ascending=False)
+
+        st.dataframe(product_summary, use_container_width=True)
+
+        # ================= DOWNLOAD OPTIONS =================
+        st.download_button(
+            label="⬇️ Download Product Summary (CSV)",
+            data=product_summary.to_csv().encode("utf-8"),
+            file_name="product_summary.csv",
+            mime="text/csv"
         )
 
-    except Exception as e:
-        st.error(f"⚠️ Error reading file: {e}")
+        st.download_button(
+            label="⬇️ Download Category Summary (CSV)",
+            data=category_summary.to_csv().encode("utf-8"),
+            file_name="category_summary.csv",
+            mime="text/csv"
+        )
+
+    else:
+        st.error(f"❌ Excel must have these columns: {', '.join(required_cols)}")
