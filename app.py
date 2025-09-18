@@ -3,11 +3,28 @@ import pandas as pd
 import base64
 
 # ---------- Helper Function ----------
-def get_csv_download_link(df: pd.DataFrame, filename: str = "data.csv"):
-    """Generates a base64 download link for a DataFrame."""
+def get_csv_download_button(df: pd.DataFrame, filename: str, button_text: str):
+    """Generates a styled HTML button for downloading a CSV."""
     csv = df.to_csv(index=False)
     b64 = base64.b64encode(csv.encode()).decode()
-    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">📥 Download {filename}</a>'
+    href = f"""
+    <a href="data:file/csv;base64,{b64}" download="{filename}">
+        <button style="
+            background-color:#4CAF50;
+            border:none;
+            color:white;
+            padding:10px 20px;
+            text-align:center;
+            text-decoration:none;
+            display:inline-block;
+            font-size:16px;
+            margin:5px;
+            border-radius:8px;
+            cursor:pointer;">
+            {button_text}
+        </button>
+    </a>
+    """
     return href
 
 # ---------- Page Config ----------
@@ -40,16 +57,25 @@ if uploaded_file:
             with col1:
                 st.markdown("### ✅ Profit Data")
                 st.dataframe(profit_df)
-                st.markdown(get_csv_download_link(profit_df, "profit_data.csv"), unsafe_allow_html=True)
+                st.markdown(
+                    get_csv_download_button(profit_df, "profit_data.csv", "📥 Download Profit Data"),
+                    unsafe_allow_html=True
+                )
 
             with col2:
                 st.markdown("### ❌ Loss Data")
                 st.dataframe(loss_df)
-                st.markdown(get_csv_download_link(loss_df, "loss_data.csv"), unsafe_allow_html=True)
+                st.markdown(
+                    get_csv_download_button(loss_df, "loss_data.csv", "📥 Download Loss Data"),
+                    unsafe_allow_html=True
+                )
 
         # ---------- Full Report Download ----------
         st.subheader("📥 Download Full Report")
-        st.markdown(get_csv_download_link(df, "full_report.csv"), unsafe_allow_html=True)
+        st.markdown(
+            get_csv_download_button(df, "full_report.csv", "📥 Download Full Report"),
+            unsafe_allow_html=True
+        )
 
     except Exception as e:
         st.error(f"⚠️ Error reading file: {e}")
